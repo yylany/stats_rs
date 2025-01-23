@@ -237,6 +237,7 @@ struct InnerStatsVal {
     pub timeout_errors: i64,
     // 连接失败次数
     pub connection_errors: i64,
+    pub status_code_error: i64,
     // HTTP 状态码统计（键为状态码，值为出现次数）
     pub http_status_codes: HashMap<u16, i64>,
     // 总请求延迟（毫秒）
@@ -297,6 +298,9 @@ impl InnerStats {
             RequestResult::ConnectionError => {
                 self.connection_errors += 1;
             }
+            RequestResult::StatusCodeError => {
+                self.status_code_error += 1;
+            }
         }
     }
 
@@ -318,11 +322,15 @@ impl InnerStats {
             connection_error: self.connection_errors,
             timeout_error: self.timeout_errors,
             parse_error: self.parse_errors,
+            status_code_error: self.status_code_error,
         };
 
         // 计算错误率
         let error_rate = if self.total_requests > 0 {
-            (self.parse_errors + self.timeout_errors + self.connection_errors) as f64
+            (self.parse_errors
+                + self.timeout_errors
+                + self.connection_errors
+                + self.status_code_error) as f64
                 / self.total_requests as f64
         } else {
             0.0

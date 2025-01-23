@@ -30,6 +30,7 @@ pub enum RequestResult {
     ParseError,         // 解析错误
     TimeoutError,       // 超时错误
     ConnectionError,    // 连接错误
+    StatusCodeError,    // 状态码异常
 }
 
 // 用于序列化和反序列化的导入
@@ -68,6 +69,9 @@ pub struct ExceptionTypes {
     // 解析错误次数
     #[serde(rename = "parseError")]
     pub parse_error: i64,
+    // 状态码异常次数
+    #[serde(rename = "statusCodeError")]
+    pub status_code_error: i64,
 }
 
 // 时间周期结构体

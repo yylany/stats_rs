@@ -59,6 +59,8 @@ pub(crate) static SPIDER_STATS_PUSH: Global<Sender<String>> = Global::new();
 pub(crate) static GET_HOSTS: Global<Box<dyn Fn() -> Result<Vec<String>> + Send + Sync>> =
     Global::new();
 
+pub(crate) static GET_BASE: Global<Box<dyn Fn() -> StatsBase + Send + Sync>> = Global::new();
+
 pub(crate) static GLOBAL_RUNTIME: Lazy<Runtime> = Lazy::new(|| get_new_rn(3, "util"));
 
 fn get_new_rn(num: usize, th_name: &str) -> Runtime {
@@ -80,7 +82,8 @@ fn get_now_millis() -> i64 {
 // 初始化爬虫推送
 pub fn init_spider_vars(
     config: RequestStatsConfig,
-    base: StatsBase,
+    // base: StatsBase,
+    get_base_call: Box<dyn Fn() -> StatsBase + Send + Sync>,
     get_host_call: Box<dyn Fn() -> Result<Vec<String>> + Send + Sync>,
 ) -> Result<()> {
     let s = push::load_broadcast_chan(config.target.clone());
@@ -93,6 +96,10 @@ pub fn init_spider_vars(
         .init(get_host_call)
         .map_err(|e| anyhow!("设置 get host call 失败"))?;
 
+    GET_BASE
+        .init(get_base_call)
+        .map_err(|e| anyhow!("设置 get base call 失败"))?;
+
     // 开启线程；定时去发送任务信息
     thread::spawn(move || loop {
         thread::sleep(config.reporting_cycle);
@@ -104,6 +111,9 @@ pub fn init_spider_vars(
                 None
             }
         };
+
+        let base = GET_BASE();
+
         send_stats(&base, host);
     });
 
@@ -444,7 +454,7 @@ pub fn run_test_tcp(addr: &str, port: u16, ping_timeout: Duration) -> Result<u64
 #[cfg(test)]
 mod tests {
     use crate::{
-        get_system_resources, init_spider_vars, send_stats, RequestStatsConfig, StatsBase,
+        get_system_resources, init_spider_vars, send_stats, RequestStatsConfig, StatsBase, GET_BASE,
     };
     use anyhow::Result;
     use std::thread;
@@ -471,6 +481,25 @@ mod tests {
             system_resources.disk_usage.used, system_resources.disk_usage.total
         );
 
+        init_spider_vars(
+            RequestStatsConfig {
+                target: vec!["ws://35.79.121.103:5003".to_string()],
+                reporting_cycle: Duration::from_secs(10000),
+                host_test_port: 0,
+            },
+            Box::new(get_base),
+            // Box::new(|| Ok(vec!["ssss".to_string()])),
+            Box::new(get_hosts),
+        )
+        .unwrap();
+
+        thread::sleep(Duration::from_secs(5));
+        let base = GET_BASE();
+
+        send_stats(&base, None);
+    }
+
+    fn get_base() -> StatsBase {
         let base = StatsBase {
             server_name: "".to_string(),
             scraper_name: "".to_string(),
@@ -478,24 +507,8 @@ mod tests {
             scraper_type: "".to_string(),
             request_frequency: 0,
         };
-
-        init_spider_vars(
-            RequestStatsConfig {
-                target: vec!["ws://35.79.121.103:5003".to_string()],
-                reporting_cycle: Duration::from_secs(10000),
-                host_test_port: 0,
-            },
-            base.clone(),
-            // Box::new(|| Ok(vec!["ssss".to_string()])),
-            Box::new(get_hosts),
-        )
-        .unwrap();
-
-        thread::sleep(Duration::from_secs(5));
-
-        send_stats(&base, None);
+        base
     }
-
     fn get_hosts() -> Result<Vec<String>> {
         Ok(vec!["ssss".to_string()])
     }

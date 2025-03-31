@@ -155,3 +155,66 @@ where
         .map_err(|err| D::Error::custom(err.to_string()))?
         .into())
 }
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum OutRespInfo {
+    // 不显示任何请求日志
+    None,
+    // 显示 url => 状态码
+    Url,
+    // 显示 url => 状态码 + head
+    Head,
+    // 显示 url => 状态码 + head + body
+    Body,
+}
+
+impl<'de> Deserialize<'de> for OutRespInfo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct OutRespInfoVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for OutRespInfoVisitor {
+            type Value = OutRespInfo;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string or a boolean")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if value {
+                    Ok(OutRespInfo::Url)
+                } else {
+                    Ok(OutRespInfo::None)
+                }
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "None" | "none" => Ok(OutRespInfo::None),
+                    "Url" | "url" => Ok(OutRespInfo::Url),
+                    "Head" | "head" => Ok(OutRespInfo::Head),
+                    "Body" | "body" => Ok(OutRespInfo::Body),
+                    _ => Err(E::custom(format!("unknown variant: {}", value))),
+                }
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                self.visit_str(&value)
+            }
+        }
+
+        deserializer.deserialize_any(OutRespInfoVisitor)
+    }
+}

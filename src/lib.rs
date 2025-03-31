@@ -11,9 +11,11 @@ use sysinfo::{CpuExt, DiskExt, System, SystemExt};
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, info};
+mod clean;
 pub mod entity;
 pub mod push;
 mod websocket;
+
 pub use entity::*;
 
 // 使用泛型 T 的包装类型
@@ -85,6 +87,9 @@ pub fn init_spider_vars(
     // base: StatsBase,
     get_base_call: Box<dyn Fn() -> StatsBase + Send + Sync>,
     get_host_call: Box<dyn Fn() -> Result<Vec<String>> + Send + Sync>,
+
+    // 清理过期文件目录; 过期时间；这个是根据文件创建时间来判断的
+    clean_paths: Option<(Vec<String>, Duration)>,
 ) -> Result<()> {
     let s = push::load_broadcast_chan(config.target.clone());
 
@@ -115,6 +120,14 @@ pub fn init_spider_vars(
         let base = GET_BASE();
 
         send_stats(&base, host);
+
+        if let Some((clean_paths, max_ts)) = &clean_paths {
+            for p in clean_paths {
+                if let Err(err) = clean::clean_old_files(p, *max_ts) {
+                    error!("删除 {p} 目录下的过期文件失败 : {}", err);
+                }
+            }
+        }
     });
 
     Ok(())
@@ -490,6 +503,7 @@ mod tests {
             Box::new(get_base),
             // Box::new(|| Ok(vec!["ssss".to_string()])),
             Box::new(get_hosts),
+            None,
         )
         .unwrap();
 
